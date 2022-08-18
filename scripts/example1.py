@@ -74,15 +74,16 @@ if __name__ == '__main__':
     # y_train_torch = torch.from_numpy(y_scaler.transform(y_train)).float()
     # y_test_torch = torch.from_numpy(y_scaler.transform(y_test)).float()
 
-    # idx_fin = 100
-    # fig, ax = plt.subplots(figsize=(16, 8))
-    # x_vec = np.arange(len(X_test))
-    # ax.fill_between(x_vec[:idx_fin], y_test_pred[:idx_fin] - np.std(y_train), y_test_pred[:idx_fin] + np.std(y_train),
-    #                 alpha=0.5, label='+/- 1 std dev')
-    # ax.plot(x_vec[:idx_fin], y_test_pred[:idx_fin], label='prediction', color='blue')
-    # ax.plot(x_vec[:idx_fin], np.squeeze(y_test)[:idx_fin], 'ko', label='true')
-    # ax.legend()
-    # plt.show()
+    idx_fin = 100
+    fig, ax = plt.subplots(figsize=(16, 8))
+    x_vec = np.arange(len(X_test))
+    ax.fill_between(x_vec[:idx_fin], y_test_pred[:idx_fin] - np.std(y_train), y_test_pred[:idx_fin] + np.std(y_train),
+                    alpha=0.5, label='+/- 1 std dev')
+    ax.plot(x_vec[:idx_fin], y_test_pred[:idx_fin], label='prediction', color='blue')
+    ax.plot(x_vec[:idx_fin], np.squeeze(y_test)[:idx_fin], 'ko', label='true')
+    ax.legend()
+    plt.savefig('../figs/lstm_scaled_results.png')
+    plt.show()
 
     targets = test[target_col][window:]
     preds_ts = pd.Series(data=test[target_col].values[:-window] * (y_test_pred + 1),

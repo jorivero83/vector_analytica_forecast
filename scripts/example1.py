@@ -81,7 +81,7 @@ if __name__ == '__main__':
                     alpha=0.5, label='+/- 1 std dev')
     ax.plot(x_vec[:idx_fin], y_test_pred[:idx_fin], label='prediction', color='blue')
     ax.plot(x_vec[:idx_fin], np.squeeze(y_test)[:idx_fin], 'ko', label='true')
-    ax.legend()
+    ax.legend(loc='best', fontsize=18)
     plt.savefig('../figs/lstm_scaled_results.png')
     plt.show()
 

@@ -1,7 +1,6 @@
-import numpy as np
-from tqdm.auto import trange
 import torch
 from torch.autograd import Variable
+from tqdm.auto import trange
 
 
 class LSTM(torch.nn.Module):
@@ -28,7 +27,7 @@ class LSTM(torch.nn.Module):
         history = []
         with trange(1, epochs + 1, desc='Training', leave=True) as steps:
             for k in steps:
-                y_pred = self.forward(x=X_torch)
+                y_pred = torch.squeeze(self.forward(x=X_torch))
                 loss = loss_fn(y_pred, y_torch)
                 status = {'loss': loss.item()}
                 history.append(status['loss'])
@@ -36,93 +35,58 @@ class LSTM(torch.nn.Module):
                 optimizer.zero_grad()  # Zero gradients
                 loss.backward()  # Gradients
                 optimizer.step()  # Update
-
         return history
 
 
 if __name__ == '__main__':
     # from sklearn.model_selection import train_test_split
-    from sklearn.preprocessing import StandardScaler, MinMaxScaler
+    from sklearn.preprocessing import StandardScaler
     from sklearn.metrics import mean_absolute_error
+    import numpy as np
     import pandas as pd
     import matplotlib.pyplot as plt
     from vector_analytica_forecast import tools
 
     torch.manual_seed(0)
     torch.cuda.manual_seed(0)
-
     df = pd.read_csv('../data/BTCUSDT_last_2000days_20220818.csv', parse_dates=['Open_time'], index_col='Open_time')
-    # df = pd.read_csv('data/BTCUSDT_last_2000days_20220818.csv', parse_dates=['Open_time'], index_col='Open_time')
-    print(df.head())
-
+    print(df.tail())
     target_col = 'Close'
     window = 7
-
-    # train test split
-    train_data, test_data = tools.train_test_split(np.log(df), test_size=0.1)
-
-    x_scaler = StandardScaler()
-    x_scaler.fit(train_data)
-
-    # extract targets
-    y_train = train_data[target_col][window:].values.reshape(-1, 1)
-    y_test = test_data[target_col][window:].values.reshape(-1, 1)
-
-    # extract window data
-    X_train = tools.extract_window_data(x_scaler.transform(train_data), window, False)
-    X_test = tools.extract_window_data(x_scaler.transform(test_data), window, False)
-
-    # train, test, X_train, X_test, y_train, y_test = tools.prepare_data(df=df, target_col=target_col, window_len=window,
-    #                                                                    zero_base=False, test_size=0.1)
-
+    train, test, X_train, X_test, y_train, y_test = tools.prepare_data(df=df, target_col=target_col, window_len=window,
+                                                                       zero_base=True, test_size=0.1)
     print(X_train.shape, y_train.shape, y_train.min(), y_train.max())
-    print(X_test.shape, y_test.shape, y_test.min(), y_test.max())
-
-    print(test_data[-window:])
-    print(test_data[-window:].shape)
-
-    # assert 1==3, "Fin"
-
-    y_scaler = StandardScaler()
-    y_scaler.fit(y_train)
-    y_train_scaled = y_scaler.transform(y_train)
-
     model = LSTM(input_dim=X_train.shape[-1], output_dim=1)
-    model.fit(X=X_train, y=y_train_scaled, epochs=1000)
-
+    model.fit(X=X_train, y=y_train, epochs=500)
     y_test_pred = np.squeeze(model(torch.as_tensor(X_test, dtype=torch.float32)).detach().numpy())
-    y_test_scaled = y_scaler.transform(y_test)
-    print(f'mean_absolute_error (test): {mean_absolute_error(y_test_scaled, y_test_pred)}')
+    print(f'mean_absolute_error (test): {mean_absolute_error(y_test, y_test_pred)}')
 
     idx_fin = 100
     fig, ax = plt.subplots(figsize=(16, 8))
     x_vec = np.arange(len(X_test))
-    ax.fill_between(x_vec[:idx_fin], y_test_pred[:idx_fin] - np.std(y_train_scaled),
-                    y_test_pred[:idx_fin] + np.std(y_train_scaled),
+    ax.fill_between(x_vec[:idx_fin], y_test_pred[:idx_fin] - np.std(y_train), y_test_pred[:idx_fin] + np.std(y_train),
                     alpha=0.5, label='+/- 1 std dev')
     ax.plot(x_vec[:idx_fin], y_test_pred[:idx_fin], label='prediction', color='blue')
-    ax.plot(x_vec[:idx_fin], np.squeeze(y_test_scaled)[:idx_fin], 'ko', label='true')
+    ax.plot(x_vec[:idx_fin], np.squeeze(y_test)[:idx_fin], 'ko', label='true')
+    ax.legend()
     ax.legend(loc='best', fontsize=18)
     plt.savefig('../figs/lstm_scaled_results.png')
     plt.show()
 
-    targets = test_data[target_col][window:]
-    # preds_ts = pd.Series(data=test_data[target_col].values[:-window] * (y_test_pred + 1),
-    #                      index=targets.index)
-    preds_ts = pd.Series(data=np.squeeze(y_scaler.inverse_transform(y_test_pred.reshape(-1, 1))),
+    targets = test[target_col][window:]
+    preds_ts = pd.Series(data=test[target_col].values[:-window] * (y_test_pred + 1),
                          index=targets.index)
-
-    # n_points = 200
+    n_points = 200
     fig, ax = plt.subplots(1, figsize=(16, 9))
-    ax.plot(targets[:-1], label='real', linewidth=3)
-    ax.plot(preds_ts.shift(-1), label='pred', linewidth=3)
+    ax.plot(targets[-n_points:][:-1], label='real', linewidth=3)
+    ax.plot(preds_ts[-n_points:].shift(-1), label='pred', linewidth=3)
     ax.set_ylabel('price [USD]', fontsize=14)
     ax.set_title('BTC prediction using LSTM with pytorch', fontsize=18)
     ax.legend(loc='best', fontsize=18)
     plt.savefig('../figs/lstm_results.png')
     plt.show()
 
-    x_new = x_scaler.transform(test_data[-window:])
+    x_new = np.array(tools.normalise_zero_base(df.iloc[-window:]))
     y_new = model(torch.tensor(x_new).unsqueeze(0).float()).detach().numpy()
-    y_new = np.squeeze(np.exp(y_scaler.inverse_transform(y_new)))[0]
+    y_new = np.squeeze(df[target_col].values[-window] * (y_new+1))
     print(f'LSTM Prediction for next day: {y_new} USDT')

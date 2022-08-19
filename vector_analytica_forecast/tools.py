@@ -25,7 +25,7 @@ def extract_window_data(df, window_len=10, zero_base=True):
         tmp = df[idx: (idx + window_len)].copy()
         if zero_base:
             tmp = normalise_zero_base(tmp)
-        window_data.append(tmp.values)
+        window_data.append(tmp)
     return np.array(window_data)
 
 

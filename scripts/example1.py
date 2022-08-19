@@ -31,7 +31,7 @@ class LSTM(torch.nn.Module):
         history = []
         with trange(1, epochs + 1, desc='Training', leave=True) as steps:
             for k in steps:
-                y_pred = torch.squeeze(self.forward(x=X_torch))
+                y_pred = self.forward(x=X_torch)
                 loss = loss_fn(y_pred, y_torch)
                 status = {'loss': loss.item()}
                 history.append(status['loss'])
@@ -45,7 +45,7 @@ class LSTM(torch.nn.Module):
 
 if __name__ == '__main__':
     # from sklearn.model_selection import train_test_split
-    from sklearn.preprocessing import StandardScaler
+    from sklearn.preprocessing import StandardScaler, MinMaxScaler
     from sklearn.metrics import mean_absolute_error
     import pandas as pd
     import matplotlib.pyplot as plt
@@ -59,16 +59,38 @@ if __name__ == '__main__':
 
     target_col = 'Close'
     window = 7
-    train, test, X_train, X_test, y_train, y_test = tools.prepare_data(df=df, target_col=target_col, window_len=window,
-                                                                       zero_base=True, test_size=0.1)
+
+    # train test split
+    train_data, test_data = tools.train_test_split(df, test_size=0.1)
+
+    x_scaler = StandardScaler()
+    x_scaler.fit(train_data)
+
+    # extract targets
+    y_train = train_data[target_col][window:].values.reshape(-1, 1)
+    y_test = test_data[target_col][window:].values.reshape(-1, 1)
+
+    # extract window data
+    X_train = tools.extract_window_data(x_scaler.transform(train_data), window, False)
+    X_test = tools.extract_window_data(x_scaler.transform(test_data), window, False)
+
+    # train, test, X_train, X_test, y_train, y_test = tools.prepare_data(df=df, target_col=target_col, window_len=window,
+    #                                                                    zero_base=False, test_size=0.1)
 
     print(X_train.shape, y_train.shape, y_train.min(), y_train.max())
 
+    y_scaler = MinMaxScaler(feature_range=(-1, 1))
+    y_scaler.fit(y_train)
+    y_train_scaled = y_scaler.transform(y_train)
+
     model = LSTM(input_dim=X_train.shape[-1], output_dim=1)
-    model.fit(X=X_train, y=y_train, epochs=200)
+    model.fit(X=X_train, y=y_train_scaled, epochs=2000)
 
     y_test_pred = np.squeeze(model(torch.as_tensor(X_test, dtype=torch.float32)).detach().numpy())
-    print(f'mean_absolute_error (test): {mean_absolute_error(y_test, y_test_pred)}')
+
+    # assert 1==3, "Fin"
+    y_test_scaled = y_scaler.transform(y_test)
+    print(f'mean_absolute_error (test): {mean_absolute_error(y_test_scaled, y_test_pred)}')
 
     # y_scaler = StandardScaler().fit(y_train)
     # y_train_torch = torch.from_numpy(y_scaler.transform(y_train)).float()
@@ -77,16 +99,19 @@ if __name__ == '__main__':
     idx_fin = 100
     fig, ax = plt.subplots(figsize=(16, 8))
     x_vec = np.arange(len(X_test))
-    ax.fill_between(x_vec[:idx_fin], y_test_pred[:idx_fin] - np.std(y_train), y_test_pred[:idx_fin] + np.std(y_train),
+    ax.fill_between(x_vec[:idx_fin], y_test_pred[:idx_fin] - np.std(y_train_scaled),
+                    y_test_pred[:idx_fin] + np.std(y_train_scaled),
                     alpha=0.5, label='+/- 1 std dev')
     ax.plot(x_vec[:idx_fin], y_test_pred[:idx_fin], label='prediction', color='blue')
-    ax.plot(x_vec[:idx_fin], np.squeeze(y_test)[:idx_fin], 'ko', label='true')
+    ax.plot(x_vec[:idx_fin], np.squeeze(y_test_scaled)[:idx_fin], 'ko', label='true')
     ax.legend(loc='best', fontsize=18)
     plt.savefig('../figs/lstm_scaled_results.png')
     plt.show()
 
-    targets = test[target_col][window:]
-    preds_ts = pd.Series(data=test[target_col].values[:-window] * (y_test_pred + 1),
+    targets = test_data[target_col][window:]
+    # preds_ts = pd.Series(data=test_data[target_col].values[:-window] * (y_test_pred + 1),
+    #                      index=targets.index)
+    preds_ts = pd.Series(data=np.squeeze(y_scaler.inverse_transform(y_test_pred.reshape(-1, 1))),
                          index=targets.index)
 
     n_points = 200
@@ -97,4 +122,5 @@ if __name__ == '__main__':
     ax.set_title('BTC prediction using LSTM with pytorch', fontsize=18)
     ax.legend(loc='best', fontsize=18)
     plt.savefig('../figs/lstm_results.png')
+    plt.show()
 

@@ -88,7 +88,7 @@ if __name__ == '__main__':
     y_train_scaled = y_scaler.transform(y_train)
 
     model = LSTM(input_dim=X_train.shape[-1], output_dim=1)
-    model.fit(X=X_train, y=y_train_scaled, epochs=1000)
+    model.fit(X=X_train, y=y_train_scaled, epochs=500)
 
     y_test_pred = np.squeeze(model(torch.as_tensor(X_test, dtype=torch.float32)).detach().numpy())
     y_test_scaled = y_scaler.transform(y_test)
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     ax.plot(x_vec[:idx_fin], y_test_pred[:idx_fin], label='prediction', color='blue')
     ax.plot(x_vec[:idx_fin], np.squeeze(y_test_scaled)[:idx_fin], 'ko', label='true')
     ax.legend(loc='best', fontsize=18)
-    plt.savefig('../figs/lstm_scaled_results.png')
+    # plt.savefig('../figs/lstm_scaled_results.png')
     plt.show()
 
     targets = test_data[target_col][window:]
@@ -119,10 +119,10 @@ if __name__ == '__main__':
     ax.set_ylabel('price [USD]', fontsize=14)
     ax.set_title('BTC prediction using LSTM with pytorch', fontsize=18)
     ax.legend(loc='best', fontsize=18)
-    plt.savefig('../figs/lstm_results.png')
+    # plt.savefig('../figs/lstm_results.png')
     plt.show()
 
     x_new = x_scaler.transform(test_data[-window:])
     y_new = model(torch.tensor(x_new).unsqueeze(0).float()).detach().numpy()
-    y_new = np.squeeze(np.exp(y_scaler.inverse_transform(y_new)))[0]
+    y_new = np.squeeze(np.exp(y_scaler.inverse_transform(y_new)))
     print(f'LSTM Prediction for next day: {y_new} USDT')
